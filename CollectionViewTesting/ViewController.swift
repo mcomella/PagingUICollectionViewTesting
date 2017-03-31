@@ -6,6 +6,39 @@
 //  Copyright © 2017 Michael Comella. All rights reserved.
 //
 
+/*
+ We implemented UIScrollViewDelegate.scrollViewWillEndDragging to reposition the scrollView after
+ dragging - this allows us to add a paging effect to the UICollectionView where the pages are smaller
+ than a screen size. I believe overriding `UICollectionViewLayout.targetContentOffset(...` is largely
+ the same. Here is a similar solution:
+   http://blog.karmadust.com/centered-paging-with-preview-cells-on-uicollectionview/
+
+ For completeness, an alternative solution would be to create a UICollectionView where:
+ - isPagingEnabled = true
+ - The UICollectionView is the size of a page, making page changes the desired size
+ - clipsToBounds = false so you can see the content adjacent to the current page in the collection view
+ - An additional gesture recognizer is added to handle the touches outside of the collection view.
+
+ Our implementation is more flexible (you can scroll mulitple pages!) and less fragile (an extra gesture
+ handler?).
+
+ ---
+ In order to mimic current Prox functionality, there are pieces missing: the content needs to be top-aligned
+ (rather than center-aligned which is the default in UICollectionView with 1 item per line) and the
+ card needs to scroll.
+
+ In order to top-align, I believe we can override `UICollectionViewLayout.layoutAttributesForItem(at:)`,
+ (from FlowLayout) setting the layout attributes such that all the items are top-aligned.
+
+ To handle scrolling, we could overlap the entire PlaceDetailViewController with a scroll view, which
+ gets a new height set each time a new item from the collection view is selected. I'm not convinced
+ the overlapping scroll views will play well with each other but I'm sure someone can figure it out. :)
+
+ ---
+ If we wanted to make this into a library or post to help others (note: the post largely exists above),
+ we may want to consider how this view handles header & footers in the collection view.
+ */
+
 import UIKit
 import SnapKit
 
@@ -30,7 +63,7 @@ class ViewController: UIViewController {
         layout.scrollDirection = .horizontal
         layout.minimumInteritemSpacing = CGFloat.greatestFiniteMagnitude
         layout.minimumLineSpacing = interCardSpacing
-        layout.itemSize = self.itemSize
+//        layout.itemSize = self.itemSize
         return layout
     }()
 
@@ -52,7 +85,7 @@ class ViewController: UIViewController {
         for subview in [collectionView] { view.addSubview(subview) }
 
         collectionView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.edges.equalToSuperview().inset(UIEdgeInsets(top: 40, left: 0, bottom: 0, right: 0))
         }
     }
 
@@ -81,18 +114,14 @@ extension ViewController: UICollectionViewDataSource {
     }
 }
 
-// todo: explain
+extension ViewController: UICollectionViewDelegate {
+}
+
+// todo: explain that this actually feels good after testing so we don't need a different value.
 private let neededVelocity: CGFloat = 0
 
-// if lib:
-// - How handle non-cell views, footers & headers?
-extension ViewController: UICollectionViewDelegate {
+extension ViewController: UIScrollViewDelegate {
 
-    // or maybe use `uicollectionviewlayout.targetContentOffset(forProposedContentOffset: CGPoint, withScrollingVelocity: CGPoint)`
-    // http://blog.karmadust.com/centered-paging-with-preview-cells-on-uicollectionview/
-    //
-    // alternative solution: create a scroll view with paging enabled
-    // difference: you can swipe through multiple if you swipe fast enough here (but could fix).
     func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
         // via http://stackoverflow.com/a/35236159/
 
@@ -105,5 +134,11 @@ extension ViewController: UICollectionViewDelegate {
 
         let newOffset: CGFloat = page * pageWidth - scrollView.contentInset.left
         targetContentOffset.pointee.x = newOffset
+    }
+}
+
+extension ViewController: UICollectionViewDelegateFlowLayout {
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        return CGSize(width: itemSize.width, height: 1000)
     }
 }
